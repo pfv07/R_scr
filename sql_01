@@ -1,0 +1,133 @@
+# CARGA DE DATOS
+# CARGA PAQUETES
+require(data.table)
+require(sqldf)
+require(reshape2)
+
+# DIRECTORIO TRABAJO
+dirtbj <- "d:/"
+setwd(dirtbj)
+
+# CARGA ARCHIVOS
+m01 <- fread("enero.txt")
+m02 <- fread("febrero.txt")
+p01 <- fread("productos.txt")
+
+# Distribución de saldos de los clientes
+# ¿Cuántos clientes se tienen en: cada oficina, en cada segmento y en cada producto?.
+# ¿Cuánto suma el saldo que de los clientes en: cada oficina, en cada segmento y en cada producto?.
+
+sqldf("SELECT OFICINA, COUNT(*) AS FRQ, SUM(SALDO) AS SALDO, AVG(SALDO) AS PRM 
+       FROM m01 
+       GROUP BY OFICINA")
+
+sqldf("SELECT SEGMENTO, COUNT(*) AS FRQ, SUM(SALDO) AS SALDO 
+       FROM m01 
+       GROUP BY SEGMENTO")
+
+sqldf("SELECT PRODUCTO, COUNT(*) AS FRQ, SUM(SALDO) AS SALDO 
+       FROM m01 
+       GROUP BY PRODUCTO")
+
+# ¿En cuánto varío el saldo entre enero y febrero para cada cliente?.
+
+d01 <- sqldf("SELECT T01.*, T02.SALDO AS SALDO_2 
+              FROM m01 T01 
+                LEFT JOIN m02 T02 ON T01.IDENTIFICACION = T02.IDENTIFICACION")
+
+# ¿Cuál es el producto con mayor variación?.
+
+d01$VRC <- (d01$SALDO_2/d01$SALDO-1)*100
+d01$ABS_VRC <- abs(d01$VRC)
+
+sqldf("SELECT PRODUCTO, MAX(ABS_VRC) AS MAX
+       FROM d01
+       GROUP BY PRODUCTO
+       ORDER BY MAX DESC")
+
+d01$ITV_VRC <- cut(d01$ABS_VRC,c(min(d01$ABS_VRC)-1,0,100,200,300,400,500,1000,2000,3000,max(d01$ABS_VRC)),dig.lab=4)
+
+dcast(d01, ITV_VRC ~ PRODUCTO)
+dcast(d01, PRODUCTO ~ ITV_VRC,sum,value.var="SALDO")
+
+# Con respecto al mes de febrero se requiere la siguiente información:
+# ¿Cuántos clientes de segmento "CORPORATIVO" tienen "TARJETA DE CREDITO" con saldos mayores a 50 dólares?
+
+sqldf("SELECT SEGMENTO, PRODUCTO, COUNT(*) AS FRQ 
+       FROM m02
+       WHERE SALDO > 50
+       GROUP BY SEGMENTO, PRODUCTO")
+
+# ¿Cuál es la suma en saldo de los clientes gestionados en las oficinas "NORTE" y "CENTRO" que tienen productos de "CUENTA AHORROS" y "CUENTA CORRIENTE"?.
+
+sqldf("SELECT OFICINA, COUNT(*) AS FRQ, SUM(SALDO) AS SALDO
+       FROM m02
+       WHERE PRODUCTO IN ('CUENTA AHORROS','CUENTA CORRIENTE')
+       GROUP BY OFICINA")
+
+# ¿Cuántas "MUJERES" tiene "CERTIFICADOS A PLAZO" con montos entre 10 y 30 dólares?.
+
+sqldf("SELECT GENERO, PRODUCTO, COUNT(*) AS FRQ
+       FROM m02
+       WHERE PRODUCTO IN ('CERTIFICADO A PLAZO')
+         AND SALDO BETWEEN 10 AND 30
+       GROUP BY GENERO, PRODUCTO")
+
+# ¿Cuál es el promedio de saldos en la oficina "CENTRO" en "TARJETAS DE DEBITO"?.
+
+sqldf("SELECT OFICINA, PRODUCTO, COUNT(*) AS FRQ, AVG(SALDO) AS SALDO
+       FROM m02
+       WHERE OFICINA IN ('CENTRO')
+         AND PRODUCTO IN ('TARJETA DE DEBITO')
+       GROUP BY OFICINA, PRODUCTO")
+
+# Se dispone de los nuevos productos colocados a ciertos clientes, se necesita analizar:
+# ¿En cuánto se incremento el AUM'S de estos clientes?.
+
+d02 <- sqldf("SELECT T01.*, T01.SALDO + IFNULL(T02.SALDO,0) AS SALDO_N
+              FROM m02 T01 
+                LEFT JOIN p01 T02 ON T01.IDENTIFICACION = T02.IDENTIFICACION")
+
+d03 <- sqldf("SELECT T02.*, T01.SALDO + T02.SALDO AS SALDO_N
+              FROM p01 T01 
+                LEFT JOIN m02 T02 ON T01.IDENTIFICACION = T02.IDENTIFICACION")
+
+sqldf("SELECT SUM(SALDO) AS SALDO_I, SUM(SALDO_N) AS SALDO_F
+       FROM d03")
+
+# ¿Cuál fue el nuevo producto más colocado y cuál es su participación con respecto al saldo?.
+
+d04 <- sqldf("SELECT PRODUCTO, COUNT(*) AS FRQ, SUM(SALDO) as SALDO
+              FROM p01
+              GROUP BY PRODUCTO
+              ORDER BY FRQ DESC")
+
+d04$PTC <- d04$SALDO/s01*100
+
+# ¿Cuál fue el segmento en que dio más resultado la colocación de nuevos productos?.
+
+
+sqldf("SELECT T02.SEGMENTO, COUNT(*) AS FRQ, SUM(T01.SALDO) as SALDO
+       FROM p01 T01 
+         LEFT JOIN m02 T02 ON T01.IDENTIFICACION = T02.IDENTIFICACION
+       GROUP BY T02.SEGMENTO
+       ORDER BY FRQ DESC")
+
+# ¿Qué opina si la siguiente campaña se la enfoca solo a HOMBRES, en base a los resultados de la última campaña de colocación de nuevos productos?.
+
+d05 <- sqldf("SELECT T01.*, T02.GENERO
+              FROM p01 T01 
+                LEFT JOIN m02 T02 ON T01.IDENTIFICACION = T02.IDENTIFICACION")
+
+dcast(d05, PRODUCTO ~ GENERO)
+dcast(d01, PRODUCTO ~ GENERO,sum,value.var="SALDO")
+
+###################################################################################################
+###################################################################################################
+
+
+
+setkey(m01,IDENTIFICACION)
+setkey(m02,IDENTIFICACION)
+
+m01[m02[,.(IDENTIFICACION,SALDO)]]
