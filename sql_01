@@ -102,6 +102,8 @@ d04 <- sqldf("SELECT PRODUCTO, COUNT(*) AS FRQ, SUM(SALDO) as SALDO
               GROUP BY PRODUCTO
               ORDER BY FRQ DESC")
 
+s01 <- sum(d04$SALDO)
+
 d04$PTC <- d04$SALDO/s01*100
 
 # ¿Cuál fue el segmento en que dio más resultado la colocación de nuevos productos?.
@@ -124,10 +126,49 @@ dcast(d01, PRODUCTO ~ GENERO,sum,value.var="SALDO")
 
 ###################################################################################################
 ###################################################################################################
+# PROCESO DE CARGA MASIVA
 
+dirtbj <- "d:/r_scr"
+setwd(dirtbj)
+f00 <- data.frame('ARCHIVO'= as.character(dir()),stringsAsFactors=FALSE)
+f00$ORDEN <- rownames(f00)
 
+for(i in 1:nrow(f00){
+if(i == 1)
+{
+data <- rbind(data,file)
+}
+name <- f00[i,1]
+file <- fread(name)
+}
 
+##################################################################################################
+EJERCICIO CON DATA.TABLES
+# Distribución de saldos de los clientes
+# ¿Cuántos clientes se tienen en: cada oficina, en cada segmento y en cada producto?.
+# ¿Cuánto suma el saldo que de los clientes en: cada oficina, en cada segmento y en cada producto?.
+dirtbj <- "d:/r_scr"
+setwd(dirtbj)
+
+# CARGA ARCHIVOS
+m01 <- fread("enero.txt")
+m02 <- fread("febrero.txt")
+p01 <- fread("productos.txt")
+
+m01[,.N,by=OFICINA]
+m01[,.N,by=SEGMENTO]
+m01[,.N,by=PRODUCTO]
+
+m01[,.(SALDO_ACU=sum(SALDO)),by=OFICINA]
+m01[,.(SALDO_ACU=sum(SALDO)),by=SEGMENTO]
+m01[,.(SALDO_ACU=sum(SALDO)),by=PRODUCTO]
+
+# ¿En cuánto varío el saldo entre enero y febrero para cada cliente?.
 setkey(m01,IDENTIFICACION)
 setkey(m02,IDENTIFICACION)
 
-m01[m02[,.(IDENTIFICACION,SALDO)]]
+m03 <- m01[m02[,.(IDENTIFICACION,SALDO_F=SALDO)]]
+m03[,":="(VRC=(SALDO_F/SALDO-1)*100,VRC_ABS=abs(VRC))]
+
+# ¿Cuál es el producto con mayor variación?.
+m03[,.(MAX_VRC=max(VRC_ABS)),by=PRODUCTO][order(-MAX_VRC)]
