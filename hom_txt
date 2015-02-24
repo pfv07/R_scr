@@ -20,3 +20,42 @@ txt <- gsub('([[:space:]])\\1+','\\1',txt)
 
 return(gsubfn(paste(names(txtchg),collapse='|'),txtchg,txt))
 }
+
+
+
+e01n <- strsplit(as.character(e01$NM),"[ ]")
+e01c <- strsplit(as.character(e01$COD),"[_]")
+
+e02n <- lapply(e01n,as.data.frame)
+e02c <- lapply(e01c,as.data.frame)
+
+## NOMBRES
+e03n <- data.frame('ORD_COD01'=numeric(),'WRD_NM'=character(),'ORD_COD02'=numeric())
+
+for(i in 1:(dim(e01)[1]))
+{
+e04 <- data.frame('ORD_COD01'=i,e02n[[i]])
+e04$ORD_COD02 <- as.integer(rownames(e04))
+colnames(e04) <- c('ORD_COD01','WRD_NM','ORD_COD02')
+e03n <- rbind(e03n,e04)
+}
+
+## CODIGOS
+e03c <- data.frame('ORD_COD01'=numeric(),'WRD_COD'=character(),'ORD_COD02'=numeric())
+
+for(i in 1:(dim(e01)[1]))
+{
+e04 <- data.frame('ORD_COD01'=i,e02c[[i]])
+e04$ORD_COD02 <- as.integer(rownames(e04))
+colnames(e04) <- c('ORD_COD01','WRD_COD','ORD_COD02')
+e03c <- rbind(e03c,e04)
+}
+
+e03 <- sqldf("select t01.ORD_COD01, t02.ORD_COD02, t01.WRD_NM, t02.WRD_COD from e03n t01 left join e03c t02 on t01.ORD_COD01 = t02.ORD_COD01 and t01.ORD_COD02 = t02.ORD_COD02")
+e04 <- sqldf("select t01.TP_COD, t01.NM, t01.COD, t02.WRD_NM, t02.WRD_COD, t02.ORD_COD01, t02.ORD_COD02 from e01 t01 left join e03 t02 on t01.ORD_COD = t02.ORD_COD01 order by ORD_COD01, ORD_COD02")
+e05 <- sqldf("select t01.*, t02.WRD_NM AS WRD_DIC_NM, if(t01.WRD_NM = t02.WRD_NM,'N','S') as ERR_NM_F from e04 t01 left join d00 t02 on t01.WRD_COD = t02.WRD_COD")
+e06 <- sqldf("select t01.*, t02.WRD_COD AS WRD_DIC_COD, if(t01.WRD_COD = t02.WRD_COD,'N','S') as ERR_COD_F from e04 t01 left join d00 t02 on t01.WRD_NM = t02.WRD_NM")
+e07 <- sqldf("select t01.*, t02.WRD_DIC_COD, t02.ERR_COD_F from e05 t01 left join e06 t02 on t01.ORD_COD01 = t02.ORD_COD01 and t01.ORD_COD02 = t02.ORD_COD02")
+e07 <- e07[,c(1:5,8,10,9,11,6,7)]
+
+
